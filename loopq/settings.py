@@ -37,7 +37,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # LoopQ apps
+    'stores',
+    'surveys',
+    'coupons',
 ]
+
+# カスタムユーザーモデル（Owner）
+AUTH_USER_MODEL = 'stores.Owner'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
