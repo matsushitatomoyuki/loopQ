@@ -1,0 +1,380 @@
+LoopQ 2週間スプリント計画
+=====================================
+対象スコープ：店舗登録フォーム・QR生成・アンケート（フェーズ1+2）
+対象外：ルーレット・クーポン・PWA
+技術スタック：Python 3.11 / Django 5.2 / SQLite（ローカル）→ PostgreSQL（本番）
+本番環境：さくらVPS 1GB・石狩リージョン
+リポジトリ：git@github.com:matsushitatomoyuki/loopQ.git
+=====================================
+
+
+Week 1：ローカル開発
+=====================================
+
+Day 1：データモデル設計・Djangoアプリ作成
+-------------------------------------
+目標：MVPに必要なモデルを定義し、開発の土台を作る
+
+作業内容：
+- git pull で最新状態にする
+- Django アプリ作成（python manage.py startapp survey 等）
+- models.py 作成（以下のモデル）
+    Store（店舗）：name / address / uuid / created_at
+    Client（来店客）：uuid / created_at
+    SurveyResponse（回答ヘッダ）：client / store / created_at
+    Answer（設問回答）：survey_response / question_no / value / answered_at
+    EventLog（イベントログ）：event_type / client / store / payload / occurred_at
+- python manage.py makemigrations && migrate
+- admin.py に各モデル登録（確認用）
+- python manage.py runserver で起動確認
+- git add . && git commit -m "Day1: モデル定義・初期マイグレーション" && git push
+
+確認ポイント：
+- http://127.0.0.1:8000/admin/ にモデルが表示される
+
+注意：
+- venv/ は絶対にコミットしない
+- db.sqlite3 もコミットしない（.gitignore済み）
+
+
+Day 2：店舗登録フォーム・QR生成
+-------------------------------------
+目標：店主が店舗を登録し、QRコードが発行できる状態にする
+
+作業内容：
+- pip install qrcode[pil]（QRコード生成ライブラリ）
+- 店舗登録フォーム（forms.py）作成：店舗名・住所
+- 店舗登録ビュー（views.py）：登録 → Store保存 → QR生成 → 表示
+- QR生成ロジック：store.uuid を含む URL を QR 化
+    例：https://（ドメイン）/q/<store_uuid>/
+- QR画像表示ページ（PNG ダウンロードも可能にする）
+- urls.py に登録
+- テンプレート作成（store_register.html / store_qr.html）
+- git add . && git commit -m "Day2: 店舗登録フォーム・QR生成" && git push
+
+確認ポイント：
+- フォームに入力 → 登録 → QRコード表示
+- スマホのカメラで QR を読んでURLが開くか確認
+
+
+Day 3：アンケートページ（フェーズ1+2・全6問）・回答保存
+-------------------------------------
+目標：QR読み取り後、客がスマホで6問に答えて DB に保存される
+
+作業内容：
+- QRからアクセスするビュー（/q/<store_uuid>/）を作成
+    アクセス時に Client.uuid を localStorage から読む or 新規発行
+    EventLog に qr_scanned を記録
+- フェーズ1ページ（2問）
+    Q1：今日、何で来ましたか？（地図 / 紹介 / 常連 / 通りかかり）
+    Q2：今日は何人で来ましたか？（1 / 2 / 3 / 4以上）
+    回答 → survey_started イベント記録 → フェーズ2へ
+- フェーズ2ページ（4問）
+    Q3：入りやすかったですか？（スライダー 1〜5）
+    Q4：店内の雰囲気・清潔感は？（スライダー 1〜5）
+    Q5：スタッフの対応は？（スライダー 1〜5）
+    Q6：価格のイメージは？（安い / ちょうどいい / 少し高い / 高い）
+- 全回答を Answer テーブルに保存
+- SurveyResponse ヘッダを保存（completed_at を記録）
+- survey_completed イベントを EventLog に記録
+- 完了ページ（「ありがとうございました」表示）
+- タップのみ操作、スライダーは range input で実装
+- git add . && git commit -m "Day3: アンケート6問・回答保存" && git push
+
+確認ポイント：
+- スマホ（実機）で QR → フェーズ1 → フェーズ2 → 完了 の流れを通す
+- DB（admin画面）に回答が保存されているか確認
+- EventLog に qr_scanned / survey_completed が記録されているか確認
+
+
+Day 4：店主ダッシュボード（回答一覧・CSV出力）・push
+-------------------------------------
+目標：店主が回答を確認でき、CSV をダウンロードできる
+
+作業内容：
+- 店主ログイン：Django デフォルト認証を使用（django.contrib.auth）
+    createsuperuser でアカウント作成
+    /login/ と /logout/ を urls.py に追加
+- ダッシュボードトップ（/dashboard/）
+    自店舗の回答件数・日付別の回答数
+    直近10件の回答一覧（日時・Q1〜Q6の値）
+- CSV エクスポート（/dashboard/export/）
+    全回答を CSV でダウンロード
+    列：日時, Q1〜Q6の値
+- ログイン必須のデコレータ（@login_required）を全ダッシュボードに付与
+- git add . && git commit -m "Day4: 店主ダッシュボード・CSV出力" && git push
+
+確認ポイント：
+- /dashboard/ にログインなしでアクセス → /login/ にリダイレクト
+- ログイン後、回答一覧が表示される
+- CSV ダウンロードで全回答が取得できる
+
+Week 1 完了チェック
+-------------------------------------
+- [ ] QR を読んでアンケートを最後まで回答できる
+- [ ] DB に回答が保存される
+- [ ] EventLog に全イベントが記録される
+- [ ] 店主ダッシュボードで回答確認・CSV 取得できる
+- [ ] 全コードが GitHub に push 済み
+
+
+Week 2：本番環境構築
+=====================================
+
+Day 5：さくらVPS SSH接続・Ubuntu初期設定・ufw・fail2ban
+-------------------------------------
+目標：VPS に安全に接続できる状態にする
+
+作業内容：
+- さくらVPS コントロールパネルから VPS 起動
+- SSH 接続確認：ssh root@<VPS_IP>
+- 一般ユーザー作成（root 直接作業を避ける）
+    adduser loopq
+    usermod -aG sudo loopq
+- SSH 公開鍵認証設定（パスワード認証を無効化）
+- ufw（ファイアウォール）設定
+    ufw allow OpenSSH
+    ufw allow 80
+    ufw allow 443
+    ufw enable
+- fail2ban インストール・起動（SSH ブルートフォース対策）
+- apt update && apt upgrade -y
+- git add . && git commit -m "Day5: VPS初期設定メモ更新" && git push（ローカル作業ログ）
+
+確認ポイント：
+- 一般ユーザーで SSH 接続できる
+- ufw status で設定が反映されている
+- root での SSH ログインが拒否される
+
+
+Day 6：Python 3.11・PostgreSQL インストール・設定
+-------------------------------------
+目標：本番環境の DB と Python が動く状態にする
+
+作業内容（VPS 上）：
+- Python 3.11 インストール
+    apt install python3.11 python3.11-venv python3-pip
+- PostgreSQL インストール
+    apt install postgresql postgresql-contrib
+- PostgreSQL 設定
+    postgres ユーザーで psql に入る
+    DB 作成：CREATE DATABASE loopq;
+    ユーザー作成：CREATE USER loopq_user WITH PASSWORD '強いパスワード';
+    権限付与：GRANT ALL PRIVILEGES ON DATABASE loopq TO loopq_user;
+- 接続確認：psql -U loopq_user -d loopq
+- パスワードは .env に記録（コードに直書き禁止）
+
+確認ポイント：
+- python3.11 --version が表示される
+- psql で loopq DB に接続できる
+
+
+Day 7：GitHubからclone・venv・Django起動（IP:8000で確認）
+-------------------------------------
+目標：VPS 上で Django が動き、ブラウザから確認できる
+
+作業内容（VPS 上）：
+- GitHub からクローン
+    git clone git@github.com:matsushitatomoyuki/loopQ.git
+- venv 作成・有効化
+    python3.11 -m venv venv
+    source venv/bin/activate
+- pip install -r requirements.txt
+- .env ファイル作成（SECRET_KEY / DB 接続情報）
+- settings.py に環境変数読み込み（python-dotenv 使用）
+- pip install psycopg2-binary（PostgreSQL ドライバ）
+- python manage.py migrate
+- python manage.py createsuperuser
+- ufw で 8000 番ポートを一時的に開放
+    ufw allow 8000
+- python manage.py runserver 0.0.0.0:8000 で起動
+- ブラウザから http://<VPS_IP>:8000 で確認
+
+確認ポイント：
+- スマホ・PC ブラウザから VPS の IP:8000 でサイトが表示される
+- /admin/ にログインできる
+
+注意：
+- requirements.txt を事前にローカルで用意して push しておく
+    pip freeze > requirements.txt
+
+
+Day 8：予備日（前半遅延吸収）
+-------------------------------------
+目標：Week 1 〜 Day 7 の遅延・問題を解消する
+
+想定作業：
+- Day 1〜7 で積み残した作業の消化
+- バグ修正
+- 動作確認の再試験
+- requirements.txt の最終確認
+- .env の整理
+
+余裕がある場合：
+- アンケートページのスマホ表示を整える（最低限の CSS）
+- ダッシュボードの視認性を改善
+
+
+Day 9：Gunicorn設定・systemd登録
+-------------------------------------
+目標：runserver を使わず、本番用サーバーで Django を動かす
+
+作業内容（VPS 上）：
+- pip install gunicorn
+- Gunicorn 動作確認
+    gunicorn loopq.wsgi:application --bind 0.0.0.0:8000
+- systemd サービスファイル作成
+    /etc/systemd/system/loopq.service
+    内容：User / WorkingDirectory / ExecStart（Gunicorn） / Restart=always
+- サービス登録・起動
+    systemctl daemon-reload
+    systemctl enable loopq
+    systemctl start loopq
+    systemctl status loopq
+
+確認ポイント：
+- systemctl status loopq が active (running)
+- VPS 再起動後も自動で Django が立ち上がる
+
+
+Day 10：Nginx設定・ポート80で表示
+-------------------------------------
+目標：ポート 80 でサイトにアクセスできる
+
+作業内容（VPS 上）：
+- apt install nginx
+- Nginx 設定ファイル作成
+    /etc/nginx/sites-available/loopq
+    内容：
+        server_name <VPS_IP>;
+        location / { proxy_pass http://127.0.0.1:8000; }
+        location /static/ { alias /home/loopq/loopQ/staticfiles/; }
+- シンボリックリンク作成
+    ln -s /etc/nginx/sites-available/loopq /etc/nginx/sites-enabled/
+- python manage.py collectstatic（静的ファイル収集）
+- nginx -t（設定ファイルの文法チェック）
+- systemctl restart nginx
+- ufw から 8000 番を閉じる（ufw delete allow 8000）
+
+確認ポイント：
+- http://<VPS_IP>/ でサイトが表示される（ポート番号なし）
+- /admin/ の CSS が崩れていない（collectstatic が効いている）
+
+
+Day 11：settings.py本番化（DEBUG=False・ALLOWED_HOSTS・SECRET_KEY）
+-------------------------------------
+目標：本番設定に切り替え、セキュリティを確保する
+
+作業内容：
+- .env に設定
+    DEBUG=False
+    SECRET_KEY=（長いランダム文字列）
+    ALLOWED_HOSTS=<VPS_IP>（ドメイン取得後はドメイン名も追加）
+    DATABASE_URL=（PostgreSQL 接続文字列）
+- settings.py の確認
+    DEBUG = env('DEBUG', default=False)
+    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
+- python manage.py check --deploy で警告確認・対応
+- systemctl restart loopq && systemctl restart nginx
+
+確認ポイント：
+- DEBUG=False の状態でサイトが表示される
+- 存在しない URL にアクセスして 404 ページが表示される（Django デバッグ画面が出ない）
+- /admin/ が正常に動く
+
+
+Day 12：全機能動作確認（QR読み取り→スマホでアンケート→DB保存）
+-------------------------------------
+目標：本番環境でエンドツーエンドの動作を確認する
+
+確認手順：
+1. VPS の /admin/ から新しいテスト店舗を登録
+2. QR コードを表示・印刷
+3. スマホ実機でQRを読み取る
+4. フェーズ1（2問）→ フェーズ2（4問）→ 完了画面まで回答
+5. /admin/ の DB で回答が保存されているか確認
+6. EventLog に全イベントが記録されているか確認
+7. ダッシュボード（/dashboard/）で回答が表示されるか確認
+8. CSV エクスポートが動くか確認
+
+確認ポイント（スマホ実機）：
+- iOS / Android 両方で試す
+- タップ操作のみで完結できる
+- 途中離脱しても問題ないか
+
+
+Day 13：バグ修正・調整
+-------------------------------------
+目標：Day 12 で見つかった問題をすべて潰す
+
+想定作業：
+- スマホ表示崩れの修正
+- 回答保存の不具合修正
+- CSV 出力の文字化け対応（utf-8-sig を使う）
+- エラーログ確認（journalctl -u loopq -n 50）
+- Nginx エラーログ確認（/var/log/nginx/error.log）
+- 修正のたびに git commit && git push → VPS で git pull
+
+手順（VPS でのデプロイ）：
+    git pull
+    source venv/bin/activate
+    pip install -r requirements.txt
+    python manage.py migrate
+    python manage.py collectstatic --noinput
+    systemctl restart loopq
+
+
+Day 14：知り合いの飲食店1軒に触ってもらう
+-------------------------------------
+目標：実際のユーザーに使ってもらい、初期フィードバックを得る
+
+準備：
+- QR コードを A4 用紙に印刷（「アンケートにご協力ください」等のメッセージ付き）
+- 店主向け説明メモ（1枚・平文）：ダッシュボードの見方・ログイン情報
+- 当日の立ち合い or 電話サポート体制
+
+実施内容：
+- 店主・スタッフに操作を見せる
+- 客として自分でもアンケートに回答する
+- 改善要望・気になった点をメモ
+- DB に回答が保存されることを店主に見せる
+
+フィードバック収集項目：
+- QR 読み取りまでの手順で詰まった点
+- アンケートで分かりにくかった設問
+- ダッシュボードで見たい情報・不足している情報
+- 全体の操作時間
+
+完了後：
+- フィードバックを docs/ にメモとして保存
+- 次スプリントの課題リストを作成
+- git add . && git commit -m "Week2完了・フィードバックメモ追加" && git push
+
+
+=====================================
+スプリント完了定義
+=====================================
+- QR → アンケート → DB保存 の一連の流れが本番環境（VPS）で動く
+- 店主が /dashboard/ で回答を確認できる
+- CSV エクスポートが動く
+- 知り合いの飲食店1軒でテスト実施完了
+- 全コードが GitHub に push 済み
+- EventLog に全イベントが記録されている
+
+
+=====================================
+禁則事項（スプリント期間中）
+=====================================
+- ルーレット・クーポン・PWA の実装禁止（スコープ外）
+- 機械学習・AI 機能の事前実装禁止
+- 過剰設計禁止（動くものを最優先）
+- venv/ のコミット禁止
+- APIキー・パスワードのコード直書き禁止（.env を使う）
+- .env を GitHub に push 禁止（.gitignore に追加すること）
+
+
+=====================================
+変更履歴
+=====================================
+- 2026年5月：初版作成
